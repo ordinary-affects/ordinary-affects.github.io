@@ -1,0 +1,27 @@
+---
+import '@fontsource/eb-garamond/400.css';
+import '@fontsource/eb-garamond/500.css';
+import '@fontsource/eb-garamond/400-italic.css';
+import '../styles/global.css';
+
+interface Props { title?: string; }
+const { title } = Astro.props;
+const pageTitle = title ? `${title} · ordinary affects` : 'ordinary affects';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/">ordinary affects</a>
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

@@ -83,3 +83,39 @@ def test_sync_writes_normalizes_and_mirrors(tmp_path):
     out = (dest / "dog-days.md").read_text(encoding="utf-8")
     assert 'title: "Dog Days"' in out
     assert 'teaser: "A scene…"' in out
+
+
+def test_extract_teaser_empty():
+    assert extract_teaser("") == ""
+
+
+def test_extract_teaser_leading_terminator():
+    # a body starting with a sentence-ender must not collapse to a bare ellipsis
+    result = extract_teaser("...and then it began. The rest follows.")
+    assert result != "…"
+    assert result.startswith("...and then it began")
+
+
+def test_yaml_quote_embedded_quotes():
+    from sync import _yaml_quote
+    assert _yaml_quote('He said "hi"') == '"He said \\"hi\\""'
+
+
+def test_is_draft_quoted_value():
+    from sync import _is_draft
+    assert _is_draft('"true"') is True
+    assert _is_draft("true") is True
+    assert _is_draft("false") is False
+
+
+def test_sync_skips_empty_slug(tmp_path):
+    # a source filename that slugifies to empty must not create a file named ".md"
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.mkdir()
+    dest.mkdir()
+    (src / "!!!.md").write_text(
+        "---\ntitle: Odd\ntype: vignette\n---\n\nA scene.\n", encoding="utf-8")
+    summary = sync(str(src), str(dest))
+    assert summary == {"written": 0, "removed": 0}
+    assert not (dest / ".md").exists()

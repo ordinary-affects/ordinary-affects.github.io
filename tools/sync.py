@@ -1,22 +1,27 @@
 """Sync finished vignettes from the Obsidian vault into the Astro content dir."""
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
-_SLUG_DROP = re.compile(r"[^a-z0-9一-鿿]+")
+_SLUG_DROP = re.compile(r"[^a-z0-9぀-ヿ㐀-鿿가-힣]+")
 _SENTENCE_END = re.compile(r"[.!?。！？]")
 
 
 def slugify(title):
-    """Lowercase kebab-case slug. Keeps CJK characters."""
+    """Lowercase kebab-case slug. Keeps CJK ideographs, kana, and Hangul."""
     return _SLUG_DROP.sub("-", title.strip().lower()).strip("-")
 
 
 def extract_teaser(body):
     """First sentence of the body, with a trailing ellipsis."""
     text = body.strip()
+    if not text:
+        return ""
     match = _SENTENCE_END.search(text)
-    first = text[: match.start()] if match else text
+    if match and match.start() > 0:
+        first = text[: match.start()]
+    else:
+        first = text
     return first.strip() + "…"
 
 
@@ -44,7 +49,7 @@ def flatten_wikilinks(body):
 
 
 def _is_draft(value):
-    return str(value).strip().lower() in ("true", "yes", "1")
+    return str(value).strip().strip('"\'').lower() in ("true", "yes", "1")
 
 
 def _yaml_quote(s):
@@ -70,7 +75,7 @@ def normalize(raw_text, mtime_iso):
 
 def _mtime_iso(path):
     ts = os.path.getmtime(path)
-    return datetime.fromtimestamp(ts).replace(microsecond=0).isoformat()
+    return datetime.fromtimestamp(ts, tz=timezone.utc).replace(microsecond=0).isoformat()
 
 
 def sync(src_dir, dest_dir):
@@ -87,6 +92,8 @@ def sync(src_dir, dest_dir):
         if out is None:
             continue
         filename = slugify(name[:-3]) + ".md"
+        if filename == ".md":
+            continue
         with open(os.path.join(dest_dir, filename), "w", encoding="utf-8") as f:
             f.write(out)
         written.add(filename)
@@ -100,7 +107,7 @@ def sync(src_dir, dest_dir):
 
 def publish(repo_dir):
     """Stage, commit, and push the synced content. Skips if nothing changed."""
-    import subprocess
+    import subprocess  # deferred so the unit tests never import it
 
     def git(*args):
         subprocess.run(["git", "-C", repo_dir, *args], check=True)

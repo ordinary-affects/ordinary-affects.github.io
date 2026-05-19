@@ -1,17 +1,21 @@
 ---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
 
+const vignettes = (await getCollection('vignettes')).sort((a, b) => {
+  const byDate = b.data.updated.getTime() - a.data.updated.getTime();
+  return byDate !== 0 ? byDate : a.data.title.localeCompare(b.data.title);
+});
 ---
-
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Base>
+  <ul class="index">
+    {vignettes.map((v) => (
+      <li class="irow">
+        <a href={`/${v.id}/`}>
+          <span class="ititle">{v.data.title}</span>
+          <span class="iteaser">{v.data.teaser}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>

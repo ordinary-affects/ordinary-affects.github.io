@@ -1,5 +1,6 @@
 from sync import slugify, extract_teaser
 from sync import parse_frontmatter, flatten_wikilinks, normalize
+from sync import sync
 
 
 def test_slugify_basic():
@@ -58,3 +59,27 @@ def test_normalize_builds_clean_frontmatter():
 def test_normalize_skips_draft():
     raw = "---\ntitle: Half Thought\ndraft: true\n---\n\nUnfinished.\n"
     assert normalize(raw, "2026-05-19T10:00:00") is None
+
+
+def test_sync_writes_normalizes_and_mirrors(tmp_path):
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.mkdir()
+    dest.mkdir()
+    (src / "Dog Days.md").write_text(
+        "---\ntitle: Dog Days\ntype: vignette\n---\n\nA scene. More text.\n",
+        encoding="utf-8")
+    (src / "Half Thought.md").write_text(
+        "---\ntitle: Half Thought\ndraft: true\n---\n\nUnfinished.\n",
+        encoding="utf-8")
+    (dest / "old-piece.md").write_text("stale", encoding="utf-8")
+
+    summary = sync(str(src), str(dest))
+
+    assert summary == {"written": 1, "removed": 1}
+    assert (dest / "dog-days.md").exists()
+    assert not (dest / "half-thought.md").exists()
+    assert not (dest / "old-piece.md").exists()
+    out = (dest / "dog-days.md").read_text(encoding="utf-8")
+    assert 'title: "Dog Days"' in out
+    assert 'teaser: "A scene…"' in out

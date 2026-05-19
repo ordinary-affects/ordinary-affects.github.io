@@ -1,5 +1,7 @@
 """Sync finished vignettes from the Obsidian vault into the Astro content dir."""
+import os
 import re
+from datetime import datetime
 
 _SLUG_DROP = re.compile(r"[^a-z0-9一-鿿]+")
 _SENTENCE_END = re.compile(r"[.!?。！？]")
@@ -64,3 +66,61 @@ def normalize(raw_text, mtime_iso):
         "---\n\n"
         f"{body}\n"
     )
+
+
+def _mtime_iso(path):
+    ts = os.path.getmtime(path)
+    return datetime.fromtimestamp(ts).replace(microsecond=0).isoformat()
+
+
+def sync(src_dir, dest_dir):
+    """Mirror finished vignettes from src_dir into dest_dir. Returns a summary."""
+    os.makedirs(dest_dir, exist_ok=True)
+    written = set()
+    for name in sorted(os.listdir(src_dir)):
+        if not name.endswith(".md"):
+            continue
+        src_path = os.path.join(src_dir, name)
+        with open(src_path, encoding="utf-8") as f:
+            raw = f.read()
+        out = normalize(raw, _mtime_iso(src_path))
+        if out is None:
+            continue
+        filename = slugify(name[:-3]) + ".md"
+        with open(os.path.join(dest_dir, filename), "w", encoding="utf-8") as f:
+            f.write(out)
+        written.add(filename)
+    removed = 0
+    for name in os.listdir(dest_dir):
+        if name.endswith(".md") and name not in written:
+            os.remove(os.path.join(dest_dir, name))
+            removed += 1
+    return {"written": len(written), "removed": removed}
+
+
+def publish(repo_dir):
+    """Stage, commit, and push the synced content. Skips if nothing changed."""
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-C", repo_dir, *args], check=True)
+
+    content = os.path.join("src", "content", "vignettes")
+    git("add", content)
+    status = subprocess.run(
+        ["git", "-C", repo_dir, "status", "--porcelain", content],
+        capture_output=True, text=True).stdout
+    if not status.strip():
+        print("vignette-publish: nothing changed")
+        return
+    git("commit", "-m", f"vignettes: sync {datetime.now():%Y-%m-%d %H:%M}")
+    git("push")
+
+
+if __name__ == "__main__":
+    src = os.environ["VIGNETTES_SRC"]
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dest = os.path.join(repo, "src", "content", "vignettes")
+    result = sync(src, dest)
+    print(f"vignette-publish: {result['written']} written, {result['removed']} removed")
+    publish(repo)
